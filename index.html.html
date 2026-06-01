@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kebun Sawit — Pencatat Panen</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --hijau: #2D6A4F;
+    --hijau-muda: #52B788;
+    --hijau-terang: #B7E4C7;
+    --kuning: #D4A017;
+    --kuning-muda: #F4D03F;
+    --coklat: #6B3A2A;
+    --bg: #F5F2EB;
+    --bg2: #EDEAE0;
+    --bg3: #E3DED2;
+    --card: #FFFFFF;
+    --teks: #1A1A1A;
+    --teks2: #5A5550;
+    --teks3: #9A9590;
+    --border: #D8D3C8;
+    --merah: #C0392B;
+    --sidebar-w: 220px;
+    --font: 'Plus Jakarta Sans', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--teks); min-height: 100vh; display: flex; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: var(--sidebar-w); background: var(--hijau); position: fixed; top: 0; left: 0; height: 100vh;
+    display: flex; flex-direction: column; z-index: 100; overflow: hidden;
+  }
+  .sidebar-brand {
+    padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .sidebar-brand .logo-icon {
+    width: 36px; height: 36px; background: var(--kuning); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 10px;
+  }
+  .sidebar-brand h1 { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.3; }
+  .sidebar-brand p { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+  .nav-items { padding: 16px 12px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px;
+    cursor: pointer; transition: all 0.15s; color: rgba(255,255,255,0.65); font-size: 13px; font-weight: 500;
+    border: none; background: none; width: 100%; text-align: left;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .nav-item.active { background: rgba(255,255,255,0.15); color: #fff; }
+  .nav-item .nav-icon { font-size: 18px; width: 20px; text-align: center; }
+  .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+  .sidebar-footer p { font-size: 11px; color: rgba(255,255,255,0.35); }
+
+  /* MAIN */
+  .main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; }
+  .topbar {
+    background: var(--card); border-bottom: 1px solid var(--border); padding: 16px 32px;
+    display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50;
+  }
+  .topbar-title { font-size: 18px; font-weight: 700; color: var(--teks); }
+  .topbar-sub { font-size: 12px; color: var(--teks3); margin-top: 2px; }
+  .topbar-actions { display: flex; gap: 10px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+    border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+    border: none; font-family: var(--font);
+  }
+  .btn-primary { background: var(--hijau); color: #fff; }
+  .btn-primary:hover { background: #245a42; }
+  .btn-outline { background: #fff; color: var(--teks); border: 1px solid var(--border); }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-danger { background: #fff; color: var(--merah); border: 1px solid #f5c6c3; }
+  .btn-danger:hover { background: #fff5f5; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-kuning { background: var(--kuning); color: #fff; }
+  .btn-kuning:hover { background: #b8891a; }
+
+  /* CONTENT */
+  .content { padding: 32px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* DASHBOARD */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--card); border-radius: 14px; padding: 20px; border: 1px solid var(--border);
+    position: relative; overflow: hidden;
+  }
+  .stat-card::before {
+    content: ''; position: absolute; top: -20px; right: -20px; width: 80px; height: 80px;
+    border-radius: 50%; opacity: 0.08;
+  }
+  .stat-card.hijau::before { background: var(--hijau); }
+  .stat-card.kuning::before { background: var(--kuning); }
+  .stat-card.biru::before { background: #2980b9; }
+  .stat-card.merah::before { background: var(--merah); }
+  .stat-label { font-size: 12px; color: var(--teks3); font-weight: 500; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 26px; font-weight: 700; color: var(--teks); font-family: var(--mono); }
+  .stat-unit { font-size: 13px; color: var(--teks2); margin-top: 4px; }
+  .stat-icon { font-size: 28px; position: absolute; bottom: 16px; right: 16px; opacity: 0.15; }
+
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+  .chart-card { background: var(--card); border-radius: 14px; padding: 24px; border: 1px solid var(--border); }
+  .chart-card h3 { font-size: 14px; font-weight: 700; color: var(--teks); margin-bottom: 18px; }
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* REMINDER BANNER */
+  .reminder-banner {
+    background: linear-gradient(135deg, #FFF8E1, #FFF3CD);
+    border: 1px solid var(--kuning-muda); border-radius: 12px; padding: 16px 20px;
+    display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+  }
+  .reminder-banner.hijau-banner { background: linear-gradient(135deg, #E8F5E9, #C8E6C9); border-color: var(--hijau-terang); }
+  .reminder-icon { font-size: 28px; }
+  .reminder-text h4 { font-size: 14px; font-weight: 700; color: var(--coklat); }
+  .reminder-text p { font-size: 12px; color: var(--teks2); margin-top: 2px; }
+
+  /* TABLE */
+  .table-card { background: var(--card); border-radius: 14px; border: 1px solid var(--border); overflow: hidden; }
+  .table-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .table-header h3 { font-size: 14px; font-weight: 700; }
+  .table-filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: var(--bg2); padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 700;
+    color: var(--teks3); text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  td { padding: 13px 16px; font-size: 13px; border-bottom: 1px solid var(--bg2); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg); }
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  }
+  .table-empty { text-align: center; padding: 48px; color: var(--teks3); }
+  .table-empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .table-empty p { font-size: 14px; }
+
+  /* FORM */
+  .form-card { background: var(--card); border-radius: 14px; border: 1px solid var(--border); padding: 32px; max-width: 720px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-size: 13px; font-weight: 600; color: var(--teks2); }
+  input, select, textarea {
+    padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 14px; font-family: var(--font); color: var(--teks); background: var(--bg);
+    transition: border-color 0.15s; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--hijau); background: #fff; }
+  .form-hint { font-size: 11px; color: var(--teks3); }
+  .computed-field {
+    padding: 10px 14px; background: var(--bg2); border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 14px; font-family: var(--mono); color: var(--hijau); font-weight: 600;
+  }
+  .form-section { margin-bottom: 24px; }
+  .form-section h3 { font-size: 13px; font-weight: 700; color: var(--teks3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--bg3); }
+  .form-actions { display: flex; gap: 12px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--bg3); }
+
+  /* SETTINGS */
+  .settings-card { background: var(--card); border-radius: 14px; border: 1px solid var(--border); padding: 32px; max-width: 600px; }
+  .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 18px 0; border-bottom: 1px solid var(--bg3); }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-label h4 { font-size: 14px; font-weight: 600; }
+  .settings-label p { font-size: 12px; color: var(--teks3); margin-top: 2px; }
+  .settings-control { display: flex; align-items: center; gap: 10px; }
+  .kebun-list { margin-top: 20px; }
+  .kebun-item {
+    display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;
+    background: var(--bg); border-radius: 8px; margin-bottom: 8px; font-size: 14px;
+  }
+  .kebun-actions { display: flex; gap: 8px; }
+
+  /* NOTIFICATION */
+  .notif {
+    position: fixed; top: 24px; right: 24px; background: var(--teks); color: #fff;
+    padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500;
+    z-index: 9999; transform: translateY(-80px); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .notif.show { transform: translateY(0); }
+  .notif.sukses { background: var(--hijau); }
+  .notif.error { background: var(--merah); }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200;
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 16px; padding: 28px; width: 90%; max-width: 480px;
+    max-height: 85vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end; }
+
+  /* RESPONSIVE */
+  @media (max-width: 768px) {
+    .sidebar { width: 60px; }
+    .sidebar-brand h1, .sidebar-brand p, .nav-item span { display: none; }
+    .main { margin-left: 60px; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+    .content { padding: 20px; }
+    .topbar { padding: 14px 20px; }
+  }
+
+  .filter-input { padding: 7px 12px; border: 1px solid var(--border); border-radius: 7px; font-size: 12px; font-family: var(--font); background: var(--bg); color: var(--teks); }
+  .lokasi-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="logo-icon">🌴</div>
+    <h1>Sawit Tracker</h1>
+    <p>Pencatat Hasil Panen</p>
+  </div>
+  <nav class="nav-items">
+    <button class="nav-item active" onclick="gotoPage('dashboard')">
+      <span class="nav-icon">📊</span><span>Dashboard</span>
+    </button>
+    <button class="nav-item" onclick="gotoPage('catat')">
+      <span class="nav-icon">✏️</span><span>Catat Panen</span>
+    </button>
+    <button class="nav-item" onclick="gotoPage('riwayat')">
+      <span class="nav-icon">📋</span><span>Riwayat</span>
+    </button>
+    <button class="nav-item" onclick="gotoPage('laporan')">
+      <span class="nav-icon">📄</span><span>Laporan & Export</span>
+    </button>
+    <button class="nav-item" onclick="gotoPage('pengaturan')">
+      <span class="nav-icon">⚙️</span><span>Pengaturan</span>
+    </button>
+  </nav>
+  <div class="sidebar-footer"><p>v1.0 • 2025</p></div>
+</aside>
+
+<!-- NOTIFICATION -->
+<div class="notif" id="notif"></div>
+
+<!-- DELETE MODAL -->
+<div class="modal-overlay" id="modalHapus">
+  <div class="modal">
+    <h3>Hapus Data Panen?</h3>
+    <p style="font-size:14px;color:var(--teks2);">Data yang dihapus tidak bisa dikembalikan.</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="tutupModal()">Batal</button>
+      <button class="btn btn-danger" onclick="konfirmasiHapus()">Ya, Hapus</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<main class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+      <div class="topbar-sub" id="topbar-sub">Ringkasan hasil panenmu</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary" onclick="gotoPage('catat')">✏️ Catat Panen</button>
+    </div>
+  </div>
+
+  <!-- ===== DASHBOARD ===== -->
+  <div class="content">
+    <div class="page active" id="page-dashboard">
+      <div id="reminder-area"></div>
+
+      <div class="stats-grid">
+        <div class="stat-card hijau">
+          <div class="stat-label">Total Panen (bulan ini)</div>
+          <div class="stat-value" id="s-berat">0</div>
+          <div class="stat-unit">kg</div>
+          <div class="stat-icon">⚖️</div>
+        </div>
+        <div class="stat-card kuning">
+          <div class="stat-label">Pendapatan Kotor</div>
+          <div class="stat-value" id="s-bruto">0</div>
+          <div class="stat-unit">Rp (bulan ini)</div>
+          <div class="stat-icon">💰</div>
+        </div>
+        <div class="stat-card merah">
+          <div class="stat-label">Total Upah Panen</div>
+          <div class="stat-value" id="s-upah">0</div>
+          <div class="stat-unit">Rp (bulan ini)</div>
+          <div class="stat-icon">👷</div>
+        </div>
+        <div class="stat-card biru">
+          <div class="stat-label">Pendapatan Bersih</div>
+          <div class="stat-value" id="s-bersih">0</div>
+          <div class="stat-unit">Rp (bulan ini)</div>
+          <div class="stat-icon">📈</div>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>📈 Berat Panen per Bulan (kg)</h3>
+          <div class="chart-wrap"><canvas id="chartBerat"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>💵 Pendapatan Bersih per Bulan (Rp)</h3>
+          <div class="chart-wrap"><canvas id="chartPendapatan"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>📦 Panen per Lokasi (kg total)</h3>
+          <div class="chart-wrap"><canvas id="chartLokasi"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>💹 Harga Sawit (Rp/kg) Tren</h3>
+          <div class="chart-wrap"><canvas id="chartHarga"></canvas></div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <h3>🕒 5 Panen Terakhir</h3>
+        </div>
+        <div id="tabel-terakhir"></div>
+      </div>
+    </div>
+
+    <!-- ===== CATAT PANEN ===== -->
+    <div class="page" id="page-catat">
+      <div class="form-card">
+        <div class="form-section">
+          <h3>📅 Data Panen</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Tanggal Panen *</label>
+              <input type="date" id="f-tanggal">
+            </div>
+            <div class="form-group">
+              <label>Lokasi Kebun *</label>
+              <select id="f-lokasi"></select>
+            </div>
+            <div class="form-group">
+              <label>Harga Sawit (Rp/kg) *</label>
+              <input type="number" id="f-harga" placeholder="mis. 2500" min="0">
+            </div>
+            <div class="form-group">
+              <label>Berat Hasil Panen (kg) *</label>
+              <input type="number" id="f-berat" placeholder="mis. 1000" min="0" step="0.1">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3>👷 Data Tukang Panen</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Nama Tukang Panen *</label>
+              <input type="text" id="f-tukang" placeholder="Nama tukang panen">
+            </div>
+            <div class="form-group">
+              <label>Biaya Upah Panen (Rp/kg) *</label>
+              <input type="number" id="f-upah-kg" placeholder="mis. 150" min="0" oninput="hitungUpah()">
+            </div>
+            <div class="form-group full">
+              <label>Total Upah Panen</label>
+              <div class="computed-field" id="f-total-upah">Rp 0</div>
+              <span class="form-hint">Otomatis: biaya upah × berat sawit</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3>📊 Ringkasan</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Pendapatan Kotor</label>
+              <div class="computed-field" id="f-bruto">Rp 0</div>
+            </div>
+            <div class="form-group">
+              <label>Pendapatan Bersih (setelah upah)</label>
+              <div class="computed-field" id="f-neto">Rp 0</div>
+            </div>
+            <div class="form-group full">
+              <label>Catatan (opsional)</label>
+              <textarea id="f-catatan" rows="2" placeholder="Kondisi panen, cuaca, dll..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="simpanPanen()" id="btn-simpan">💾 Simpan Data Panen</button>
+          <button class="btn btn-outline" onclick="resetForm()">🔄 Reset Form</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== RIWAYAT ===== -->
+    <div class="page" id="page-riwayat">
+      <div class="table-card">
+        <div class="table-header">
+          <h3>Semua Catatan Panen</h3>
+          <div class="table-filters">
+            <select class="filter-input" id="filter-lokasi" onchange="renderRiwayat()">
+              <option value="">Semua Lokasi</option>
+            </select>
+            <select class="filter-input" id="filter-bulan" onchange="renderRiwayat()">
+              <option value="">Semua Bulan</option>
+            </select>
+            <input type="text" class="filter-input" placeholder="Cari tukang..." id="filter-tukang" oninput="renderRiwayat()" style="width:140px">
+          </div>
+        </div>
+        <div id="tabel-riwayat"></div>
+      </div>
+    </div>
+
+    <!-- ===== LAPORAN ===== -->
+    <div class="page" id="page-laporan">
+      <div class="form-card" style="max-width:520px;margin-bottom:20px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:20px;">📄 Export Laporan</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Dari Tanggal</label>
+            <input type="date" id="lap-dari">
+          </div>
+          <div class="form-group">
+            <label>Sampai Tanggal</label>
+            <input type="date" id="lap-sampai">
+          </div>
+          <div class="form-group">
+            <label>Lokasi</label>
+            <select id="lap-lokasi">
+              <option value="">Semua Lokasi</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;">
+          <button class="btn btn-danger" onclick="exportPDF()">📕 Export PDF</button>
+          <button class="btn btn-primary" onclick="exportExcel()">📗 Export Excel</button>
+        </div>
+      </div>
+      <div class="table-card">
+        <div class="table-header"><h3>Preview Laporan</h3></div>
+        <div id="tabel-laporan"></div>
+      </div>
+    </div>
+
+    <!-- ===== PENGATURAN ===== -->
+    <div class="page" id="page-pengaturan">
+      <div class="settings-card" style="margin-bottom:20px;">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:4px;">⚙️ Pengaturan Aplikasi</h3>
+        <p style="font-size:12px;color:var(--teks3);margin-bottom:24px;">Konfigurasi kebun dan jadwal panen</p>
+
+        <div class="settings-row">
+          <div class="settings-label">
+            <h4>Interval Pengingat Panen</h4>
+            <p>Berapa hari sekali kebun dipanen?</p>
+          </div>
+          <div class="settings-control">
+            <input type="number" id="set-interval" value="20" min="1" max="90" style="width:70px;text-align:center;">
+            <span style="font-size:13px;color:var(--teks2);">hari</span>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary btn-sm" onclick="simpanPengaturan()">💾 Simpan Pengaturan</button>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:4px;">🌴 Kelola Lokasi Kebun</h3>
+        <p style="font-size:12px;color:var(--teks3);margin-bottom:20px;">Tambah atau hapus lokasi kebunmu</p>
+        <div style="display:flex;gap:10px;margin-bottom:16px;">
+          <input type="text" id="input-kebun" placeholder="Nama lokasi kebun baru..." style="flex:1;">
+          <button class="btn btn-primary btn-sm" onclick="tambahKebun()">+ Tambah</button>
+        </div>
+        <div class="kebun-list" id="daftar-kebun"></div>
+      </div>
+    </div>
+
+  </div><!-- end content -->
+</main>
+
+<script>
+// ===== DATABASE =====
+const DB_NAME = 'SawitTrackerDB', DB_VER = 1;
+let db;
+
+function bukaDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('panen')) {
+        const s = d.createObjectStore('panen', { keyPath: 'id', autoIncrement: true });
+        s.createIndex('tanggal', 'tanggal');
+        s.createIndex('lokasi', 'lokasi');
+      }
+      if (!d.objectStoreNames.contains('settings')) {
+        d.createObjectStore('settings', { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; res(db); };
+    req.onerror = () => rej(req.error);
+  });
+}
+
+function txStore(store, mode = 'readonly') {
+  return db.transaction(store, mode).objectStore(store);
+}
+
+function dbGetAll(store) {
+  return new Promise(res => {
+    const req = txStore(store).getAll();
+    req.onsuccess = () => res(req.result);
+  });
+}
+
+function dbGet(store, key) {
+  return new Promise(res => {
+    const req = txStore(store).get(key);
+    req.onsuccess = () => res(req.result);
+  });
+}
+
+function dbPut(store, val) {
+  return new Promise(res => {
+    const req = txStore(store, 'readwrite').put(val);
+    req.onsuccess = () => res(req.result);
+  });
+}
+
+function dbDelete(store, key) {
+  return new Promise(res => {
+    const req = txStore(store, 'readwrite').delete(key);
+    req.onsuccess = () => res();
+  });
+}
+
+// ===== STATE =====
+let allPanen = [];
+let pengaturan = { interval: 20, kebun: ['Kebun TPS', 'Kebun Kampung'] };
+let hapusId = null;
+let editId = null;
+let charts = {};
+
+// ===== UTILS =====
+const rp = v => 'Rp ' + Math.round(v).toLocaleString('id-ID');
+const kg = v => parseFloat(v).toLocaleString('id-ID', {maximumFractionDigits:1}) + ' kg';
+
+function notif(msg, tipe = 'sukses') {
+  const el = document.getElementById('notif');
+  el.textContent = (tipe === 'sukses' ? '✅ ' : tipe === 'error' ? '❌ ' : 'ℹ️ ') + msg;
+  el.className = 'notif show ' + tipe;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+const LOKASI_WARNA = ['#2D6A4F','#52B788','#D4A017','#2980b9','#8e44ad','#e67e22'];
+function warnaLokasi(i) { return LOKASI_WARNA[i % LOKASI_WARNA.length]; }
+
+// ===== NAVIGASI =====
+const PAGES = { dashboard: ['Dashboard','Ringkasan hasil panenmu'], catat:['Catat Panen','Input data hasil panen baru'], riwayat:['Riwayat Panen','Semua catatan panen'], laporan:['Laporan & Export','Export ke PDF atau Excel'], pengaturan:['Pengaturan','Konfigurasi kebun & jadwal'] };
+function gotoPage(p) {
+  document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+  document.getElementById('page-' + p).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.nav-item')[Object.keys(PAGES).indexOf(p)].classList.add('active');
+  document.getElementById('topbar-title').textContent = PAGES[p][0];
+  document.getElementById('topbar-sub').textContent = PAGES[p][1];
+  if (p === 'dashboard') renderDashboard();
+  if (p === 'riwayat') renderRiwayat();
+  if (p === 'laporan') renderLaporan();
+  if (p === 'pengaturan') renderPengaturan();
+  if (p === 'catat' && !editId) { resetForm(); isiTanggalHari(); }
+}
+
+// ===== PENGATURAN =====
+async function muatPengaturan() {
+  const s = await dbGet('settings', 'main');
+  if (s) pengaturan = s.value;
+  else pengaturan = { interval: 20, kebun: ['Kebun TPS', 'Kebun Kampung'] };
+}
+
+async function simpanPengaturan() {
+  pengaturan.interval = parseInt(document.getElementById('set-interval').value) || 20;
+  await dbPut('settings', { key: 'main', value: pengaturan });
+  isiDropdownKebun();
+  notif('Pengaturan disimpan!');
+}
+
+async function tambahKebun() {
+  const v = document.getElementById('input-kebun').value.trim();
+  if (!v) return;
+  if (pengaturan.kebun.includes(v)) { notif('Nama kebun sudah ada', 'error'); return; }
+  pengaturan.kebun.push(v);
+  await dbPut('settings', { key: 'main', value: pengaturan });
+  document.getElementById('input-kebun').value = '';
+  isiDropdownKebun();
+  renderPengaturan();
+  notif('Kebun "' + v + '" ditambahkan!');
+}
+
+async function hapusKebun(nama) {
+  pengaturan.kebun = pengaturan.kebun.filter(k => k !== nama);
+  await dbPut('settings', { key: 'main', value: pengaturan });
+  isiDropdownKebun();
+  renderPengaturan();
+  notif('Kebun dihapus');
+}
+
+function renderPengaturan() {
+  document.getElementById('set-interval').value = pengaturan.interval;
+  const el = document.getElementById('daftar-kebun');
+  if (!pengaturan.kebun.length) { el.innerHTML = '<p style="color:var(--teks3);font-size:13px;">Belum ada kebun. Tambahkan di atas.</p>'; return; }
+  el.innerHTML = pengaturan.kebun.map((k,i) =>
+    `<div class="kebun-item">
+      <span><span class="lokasi-dot" style="background:${warnaLokasi(i)}"></span>${k}</span>
+      <div class="kebun-actions"><button class="btn btn-danger btn-sm" onclick="hapusKebun('${k}')">🗑️ Hapus</button></div>
+    </div>`
+  ).join('');
+}
+
+function isiDropdownKebun() {
+  ['f-lokasi','filter-lokasi','lap-lokasi'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const prev = el.value;
+    const first = id !== 'f-lokasi' ? '<option value="">Semua Lokasi</option>' : '';
+    el.innerHTML = first + pengaturan.kebun.map(k => `<option value="${k}">${k}</option>`).join('');
+    if (prev) el.value = prev;
+  });
+}
+
+// ===== FORM PANEN =====
+function isiTanggalHari() {
+  const t = new Date(); const y = t.getFullYear(); const m = String(t.getMonth()+1).padStart(2,'0'); const d = String(t.getDate()).padStart(2,'0');
+  document.getElementById('f-tanggal').value = `${y}-${m}-${d}`;
+}
+
+function hitungUpah() {
+  const berat = parseFloat(document.getElementById('f-berat').value) || 0;
+  const upahKg = parseFloat(document.getElementById('f-upah-kg').value) || 0;
+  const harga = parseFloat(document.getElementById('f-harga').value) || 0;
+  const totalUpah = berat * upahKg;
+  const bruto = berat * harga;
+  const neto = bruto - totalUpah;
+  document.getElementById('f-total-upah').textContent = rp(totalUpah);
+  document.getElementById('f-bruto').textContent = rp(bruto);
+  document.getElementById('f-neto').textContent = rp(neto);
+}
+
+document.getElementById('f-berat').addEventListener('input', hitungUpah);
+document.getElementById('f-harga').addEventListener('input', hitungUpah);
+
+function resetForm() {
+  editId = null;
+  document.getElementById('btn-simpan').textContent = '💾 Simpan Data Panen';
+  ['f-tanggal','f-harga','f-berat','f-tukang','f-upah-kg','f-catatan'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('f-total-upah').textContent = 'Rp 0';
+  document.getElementById('f-bruto').textContent = 'Rp 0';
+  document.getElementById('f-neto').textContent = 'Rp 0';
+}
+
+async function simpanPanen() {
+  const tanggal = document.getElementById('f-tanggal').value;
+  const lokasi = document.getElementById('f-lokasi').value;
+  const harga = parseFloat(document.getElementById('f-harga').value);
+  const berat = parseFloat(document.getElementById('f-berat').value);
+  const tukang = document.getElementById('f-tukang').value.trim();
+  const upahKg = parseFloat(document.getElementById('f-upah-kg').value);
+  if (!tanggal || !lokasi || !harga || !berat || !tukang || !upahKg) {
+    notif('Lengkapi semua data yang wajib diisi!', 'error'); return;
+  }
+  const totalUpah = berat * upahKg;
+  const bruto = berat * harga;
+  const neto = bruto - totalUpah;
+  const data = { tanggal, lokasi, harga, berat, tukang, upahKg, totalUpah, bruto, neto, catatan: document.getElementById('f-catatan').value };
+  if (editId) { data.id = editId; await dbPut('panen', data); notif('Data berhasil diperbarui!'); }
+  else { await dbPut('panen', data); notif('Data panen berhasil disimpan!'); }
+  allPanen = await dbGetAll('panen');
+  resetForm(); isiTanggalHari();
+  gotoPage('riwayat');
+}
+
+// ===== RENDER RIWAYAT =====
+function renderRiwayat() {
+  const filterLokasi = document.getElementById('filter-lokasi')?.value || '';
+  const filterBulan = document.getElementById('filter-bulan')?.value || '';
+  const filterTukang = (document.getElementById('filter-tukang')?.value || '').toLowerCase();
+
+  // Isi filter bulan
+  const bulanSet = [...new Set(allPanen.map(p => p.tanggal.slice(0,7)))].sort().reverse();
+  const fbEl = document.getElementById('filter-bulan');
+  if (fbEl) {
+    const prevBulan = fbEl.value;
+    fbEl.innerHTML = '<option value="">Semua Bulan</option>' + bulanSet.map(b => `<option value="${b}">${formatBulan(b)}</option>`).join('');
+    if (prevBulan) fbEl.value = prevBulan;
+  }
+
+  let data = [...allPanen].sort((a,b) => b.tanggal.localeCompare(a.tanggal));
+  if (filterLokasi) data = data.filter(p => p.lokasi === filterLokasi);
+  if (filterBulan) data = data.filter(p => p.tanggal.startsWith(filterBulan));
+  if (filterTukang) data = data.filter(p => p.tukang.toLowerCase().includes(filterTukang));
+
+  document.getElementById('tabel-riwayat').innerHTML = renderTabel(data, true);
+}
+
+function renderTabel(data, aksi = false) {
+  if (!data.length) return `<div class="table-empty"><div class="empty-icon">🌴</div><p>Belum ada data panen</p></div>`;
+  return `<table>
+    <thead><tr>
+      <th>Tanggal</th><th>Lokasi</th><th>Tukang</th><th>Berat</th><th>Harga/kg</th><th>Bruto</th><th>Upah</th><th>Bersih</th>
+      ${aksi ? '<th>Aksi</th>' : ''}
+    </tr></thead>
+    <tbody>
+    ${data.map(p => {
+      const li = pengaturan.kebun.indexOf(p.lokasi);
+      return `<tr>
+        <td><span style="font-family:var(--mono);font-size:12px;">${formatTanggal(p.tanggal)}</span></td>
+        <td><span class="badge" style="background:${warnaLokasi(li)}22;color:${warnaLokasi(li)};border:1px solid ${warnaLokasi(li)}44;">
+          <span class="lokasi-dot" style="background:${warnaLokasi(li)}"></span>${p.lokasi}</span></td>
+        <td>${p.tukang}</td>
+        <td><b>${kg(p.berat)}</b></td>
+        <td>${rp(p.harga)}</td>
+        <td>${rp(p.bruto)}</td>
+        <td style="color:var(--merah)">${rp(p.totalUpah)}</td>
+        <td style="color:var(--hijau);font-weight:700;">${rp(p.neto)}</td>
+        ${aksi ? `<td><div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="editPanen(${p.id})">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="konfirmasiHapusBuka(${p.id})">🗑️</button>
+        </div></td>` : ''}
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+// ===== EDIT =====
+async function editPanen(id) {
+  const p = allPanen.find(x => x.id === id);
+  if (!p) return;
+  editId = id;
+  gotoPage('catat');
+  setTimeout(() => {
+    document.getElementById('f-tanggal').value = p.tanggal;
+    document.getElementById('f-lokasi').value = p.lokasi;
+    document.getElementById('f-harga').value = p.harga;
+    document.getElementById('f-berat').value = p.berat;
+    document.getElementById('f-tukang').value = p.tukang;
+    document.getElementById('f-upah-kg').value = p.upahKg;
+    document.getElementById('f-catatan').value = p.catatan || '';
+    document.getElementById('btn-simpan').textContent = '💾 Perbarui Data Panen';
+    hitungUpah();
+  }, 50);
+}
+
+// ===== HAPUS =====
+function konfirmasiHapusBuka(id) { hapusId = id; document.getElementById('modalHapus').classList.add('open'); }
+function tutupModal() { document.getElementById('modalHapus').classList.remove('open'); hapusId = null; }
+async function konfirmasiHapus() {
+  if (!hapusId) return;
+  await dbDelete('panen', hapusId);
+  allPanen = await dbGetAll('panen');
+  tutupModal(); renderRiwayat(); notif('Data dihapus');
+}
+
+// ===== LAPORAN =====
+function renderLaporan() {
+  const dari = document.getElementById('lap-dari').value;
+  const sampai = document.getElementById('lap-sampai').value;
+  const lokasi = document.getElementById('lap-lokasi').value;
+  let data = [...allPanen].sort((a,b) => a.tanggal.localeCompare(b.tanggal));
+  if (dari) data = data.filter(p => p.tanggal >= dari);
+  if (sampai) data = data.filter(p => p.tanggal <= sampai);
+  if (lokasi) data = data.filter(p => p.lokasi === lokasi);
+  document.getElementById('tabel-laporan').innerHTML = renderTabel(data, false);
+}
+
+function getDataLaporan() {
+  const dari = document.getElementById('lap-dari').value;
+  const sampai = document.getElementById('lap-sampai').value;
+  const lokasi = document.getElementById('lap-lokasi').value;
+  let data = [...allPanen].sort((a,b) => a.tanggal.localeCompare(b.tanggal));
+  if (dari) data = data.filter(p => p.tanggal >= dari);
+  if (sampai) data = data.filter(p => p.tanggal <= sampai);
+  if (lokasi) data = data.filter(p => p.lokasi === lokasi);
+  return data;
+}
+
+function exportExcel() {
+  const data = getDataLaporan();
+  if (!data.length) { notif('Tidak ada data untuk diexport', 'error'); return; }
+  const rows = [['Tanggal','Lokasi','Tukang Panen','Berat (kg)','Harga (Rp/kg)','Pendapatan Kotor','Upah Panen','Pendapatan Bersih','Catatan']];
+  data.forEach(p => rows.push([p.tanggal, p.lokasi, p.tukang, p.berat, p.harga, p.bruto, p.totalUpah, p.neto, p.catatan||'']));
+  const total = data.reduce((a,p) => ({ berat: a.berat+p.berat, bruto: a.bruto+p.bruto, upah: a.upah+p.totalUpah, neto: a.neto+p.neto }), {berat:0,bruto:0,upah:0,neto:0});
+  rows.push(['TOTAL','','',total.berat,'',total.bruto,total.upah,total.neto,'']);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:12},{wch:14},{wch:16},{wch:10},{wch:12},{wch:16},{wch:14},{wch:16},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Hasil Panen');
+  XLSX.writeFile(wb, 'laporan-panen-sawit.xlsx');
+  notif('Excel berhasil diexport!');
+}
+
+function exportPDF() {
+  const data = getDataLaporan();
+  if (!data.length) { notif('Tidak ada data untuk diexport', 'error'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16); doc.setTextColor(45, 106, 79);
+  doc.text('LAPORAN HASIL PANEN SAWIT', 14, 18);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90, 85, 80);
+  const dari = document.getElementById('lap-dari').value || 'Semua';
+  const sampai = document.getElementById('lap-sampai').value || 'Semua';
+  doc.text(`Periode: ${dari} s/d ${sampai}   |   Dicetak: ${new Date().toLocaleDateString('id-ID')}`, 14, 25);
+  const rows = data.map(p => [formatTanggal(p.tanggal), p.lokasi, p.tukang, kg(p.berat), rp(p.harga), rp(p.bruto), rp(p.totalUpah), rp(p.neto)]);
+  const total = data.reduce((a,p) => ({ berat: a.berat+p.berat, bruto: a.bruto+p.bruto, upah: a.upah+p.totalUpah, neto: a.neto+p.neto }), {berat:0,bruto:0,upah:0,neto:0});
+  rows.push(['TOTAL','','',kg(total.berat),'',rp(total.bruto),rp(total.upah),rp(total.neto)]);
+  doc.autoTable({
+    startY: 30,
+    head: [['Tanggal','Lokasi','Tukang','Berat','Harga/kg','Bruto','Upah','Bersih']],
+    body: rows,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [45, 106, 79], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [245, 242, 235] },
+    foot: [],
+    didParseCell: d => {
+      if (d.row.index === rows.length - 1) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [212, 160, 23]; d.cell.styles.textColor = 255; }
+    }
+  });
+  doc.save('laporan-panen-sawit.pdf');
+  notif('PDF berhasil diexport!');
+}
+
+// ===== DASHBOARD =====
+function renderDashboard() {
+  const now = new Date(); const bulanIni = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const dataBulanIni = allPanen.filter(p => p.tanggal.startsWith(bulanIni));
+  const sBerat = dataBulanIni.reduce((a,p) => a+p.berat, 0);
+  const sBruto = dataBulanIni.reduce((a,p) => a+p.bruto, 0);
+  const sUpah = dataBulanIni.reduce((a,p) => a+p.totalUpah, 0);
+  const sBersih = dataBulanIni.reduce((a,p) => a+p.neto, 0);
+  document.getElementById('s-berat').textContent = parseFloat(sBerat).toLocaleString('id-ID',{maximumFractionDigits:1});
+  document.getElementById('s-bruto').textContent = Math.round(sBruto/1000).toLocaleString('id-ID') + 'K';
+  document.getElementById('s-upah').textContent = Math.round(sUpah/1000).toLocaleString('id-ID') + 'K';
+  document.getElementById('s-bersih').textContent = Math.round(sBersih/1000).toLocaleString('id-ID') + 'K';
+
+  // Reminder
+  renderReminder();
+
+  // Tabel terakhir
+  const terakhir = [...allPanen].sort((a,b) => b.tanggal.localeCompare(a.tanggal)).slice(0,5);
+  document.getElementById('tabel-terakhir').innerHTML = renderTabel(terakhir, false);
+
+  // Charts
+  renderCharts();
+}
+
+function renderReminder() {
+  const area = document.getElementById('reminder-area');
+  if (!allPanen.length) { area.innerHTML = ''; return; }
+  const sorted = [...allPanen].sort((a,b) => b.tanggal.localeCompare(a.tanggal));
+  const lastDate = new Date(sorted[0].tanggal);
+  const now = new Date();
+  const diff = Math.floor((now - lastDate) / 86400000);
+  const interval = pengaturan.interval;
+  const sisa = interval - diff;
+  if (sisa <= 3 && sisa > 0) {
+    area.innerHTML = `<div class="reminder-banner">
+      <div class="reminder-icon">⏰</div>
+      <div class="reminder-text"><h4>Jadwal Panen Mendekati!</h4>
+      <p>Panen terakhir ${diff} hari lalu (${formatTanggal(sorted[0].tanggal)}). Jadwal panen berikutnya <b>${sisa} hari lagi</b> (setiap ${interval} hari).</p></div>
+    </div>`;
+  } else if (sisa <= 0) {
+    area.innerHTML = `<div class="reminder-banner">
+      <div class="reminder-icon">🔔</div>
+      <div class="reminder-text"><h4>Sudah Waktunya Panen!</h4>
+      <p>Panen terakhir ${diff} hari lalu. Sudah melewati jadwal ${interval} hari. Segera catat hasil panen!</p></div>
+    </div>`;
+  } else {
+    area.innerHTML = `<div class="reminder-banner hijau-banner">
+      <div class="reminder-icon">✅</div>
+      <div class="reminder-text"><h4>Jadwal Panen On-Track</h4>
+      <p>Panen terakhir ${diff} hari lalu. Jadwal panen berikutnya <b>${sisa} hari lagi</b>.</p></div>
+    </div>`;
+  }
+}
+
+function renderCharts() {
+  // Bulan-bulan
+  const now = new Date();
+  const bulanList = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    bulanList.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  const labels = bulanList.map(b => formatBulan(b));
+
+  const beratData = bulanList.map(b => allPanen.filter(p => p.tanggal.startsWith(b)).reduce((a,p) => a+p.berat, 0));
+  const pendData = bulanList.map(b => allPanen.filter(p => p.tanggal.startsWith(b)).reduce((a,p) => a+p.neto, 0));
+  const hargaData = allPanen.sort((a,b) => a.tanggal.localeCompare(b.tanggal)).slice(-10);
+
+  // Per lokasi
+  const lokasiData = pengaturan.kebun.map(k => allPanen.filter(p => p.lokasi === k).reduce((a,p) => a+p.berat, 0));
+
+  const common = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+
+  if (charts.berat) charts.berat.destroy();
+  charts.berat = new Chart(document.getElementById('chartBerat'), {
+    type: 'bar', data: { labels, datasets: [{ data: beratData, backgroundColor: '#52B78866', borderColor: '#2D6A4F', borderWidth: 2, borderRadius: 6 }] },
+    options: { ...common, scales: { y: { beginAtZero: true } } }
+  });
+
+  if (charts.pend) charts.pend.destroy();
+  charts.pend = new Chart(document.getElementById('chartPendapatan'), {
+    type: 'line', data: { labels, datasets: [{ data: pendData, borderColor: '#2D6A4F', backgroundColor: '#2D6A4F22', fill: true, tension: 0.4, pointBackgroundColor: '#2D6A4F' }] },
+    options: { ...common, scales: { y: { beginAtZero: true } } }
+  });
+
+  if (charts.lokasi) charts.lokasi.destroy();
+  charts.lokasi = new Chart(document.getElementById('chartLokasi'), {
+    type: 'doughnut',
+    data: { labels: pengaturan.kebun, datasets: [{ data: lokasiData, backgroundColor: LOKASI_WARNA.slice(0, pengaturan.kebun.length) }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 12 } } } } }
+  });
+
+  if (charts.harga) charts.harga.destroy();
+  charts.harga = new Chart(document.getElementById('chartHarga'), {
+    type: 'line',
+    data: { labels: hargaData.map(p => formatTanggal(p.tanggal)), datasets: [{ data: hargaData.map(p => p.harga), borderColor: '#D4A017', backgroundColor: '#D4A01722', fill: true, tension: 0.4, pointBackgroundColor: '#D4A017' }] },
+    options: { ...common, scales: { y: { beginAtZero: false } } }
+  });
+}
+
+// ===== FORMAT =====
+function formatTanggal(t) {
+  if (!t) return '-';
+  const [y,m,d] = t.split('-');
+  const bl = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  return `${d} ${bl[parseInt(m)-1]} ${y}`;
+}
+function formatBulan(b) {
+  const [y,m] = b.split('-');
+  const bl = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  return `${bl[parseInt(m)-1]} ${y}`;
+}
+
+// ===== INIT =====
+async function init() {
+  await bukaDB();
+  await muatPengaturan();
+  allPanen = await dbGetAll('panen');
+  isiDropdownKebun();
+  isiTanggalHari();
+
+  // Set default tanggal laporan
+  const now = new Date();
+  const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('lap-dari').value = `${y}-${m}-01`;
+  document.getElementById('lap-sampai').value = `${y}-${m}-${String(new Date(y,now.getMonth()+1,0).getDate()).padStart(2,'0')}`;
+
+  document.getElementById('lap-dari').addEventListener('change', renderLaporan);
+  document.getElementById('lap-sampai').addEventListener('change', renderLaporan);
+  document.getElementById('lap-lokasi').addEventListener('change', renderLaporan);
+
+  renderDashboard();
+}
+init();
+</script>
+</body>
+</html>
